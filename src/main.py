@@ -1,0 +1,1 @@
+print('Dungeon Escape - environment OK')
