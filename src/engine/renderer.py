@@ -100,3 +100,22 @@ class Renderer:
         width, _ = self.size()
         x = max(0, (width - len(str(text))) // 2)
         self.put(x, y, text, color)
+
+    def draw_level(self, level: Any) -> None:
+        """Draw every row of level.grid with ONE put() call per row, then living items and enemies."""
+        for y, row in enumerate(level.grid):
+            line = "".join(row) if isinstance(row, (list, tuple)) else str(row)
+            self.put(0, y, line, color="wall")
+
+        items = getattr(level, "items", []) or []
+        enemies = getattr(level, "enemies", []) or []
+        for entity in items + enemies:
+            if getattr(entity, "alive", False):
+                self.put(entity.x, entity.y, entity.char, color=entity.color)
+
+    def draw_player(self, player: Any) -> None:
+        """Draw the player entity using its coordinates, character, and color."""
+        char = getattr(player, "char", "@")
+        color = getattr(player, "color", "player")
+        self.put(player.x, player.y, char, color=color)
+
