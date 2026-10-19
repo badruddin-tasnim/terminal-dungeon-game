@@ -1,6 +1,8 @@
 """Game objects (Member 2).
 Every object on the map has a position (x, y), a character and a colour.
 """
+import random
+from engine.utils import sign
 
 
 class Entity:
@@ -48,6 +50,29 @@ class Enemy(Entity):
         super().__init__(x, y, "E", "enemy")
         self.behavior = behavior  # patrol_h, patrol_v, random, chase
         self.dx, self.dy = (0, 1) if behavior == "patrol_v" else (1, 0)
+
+    def next_move(self, is_blocked, player):
+        """Return the tile the enemy WANTS to move to. The game validates it."""
+        if self.behavior in ("patrol_h", "patrol_v"):
+            if is_blocked(self.x + self.dx, self.y + self.dy):
+                self.dx, self.dy = -self.dx, -self.dy  # turn around
+            return self.x + self.dx, self.y + self.dy
+
+        if self.behavior == "random":
+            dx, dy = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1), (0, 0)])
+            return self.x + dx, self.y + dy
+
+        if self.behavior == "chase":
+            dx, dy = player.x - self.x, player.y - self.y
+            # try the longer axis first, then the other one
+            if abs(dx) >= abs(dy):
+                options = [(sign(dx), 0), (0, sign(dy))]
+            else:
+                options = [(0, sign(dy)), (sign(dx), 0)]
+            for step_x, step_y in options:
+                if (step_x, step_y) != (0, 0) and not is_blocked(self.x + step_x, self.y + step_y):
+                    return self.x + step_x, self.y + step_y
+            return self.x, self.y
 
 
 class Key(Entity):
