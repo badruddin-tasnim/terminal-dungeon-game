@@ -3,23 +3,31 @@
 import curses
 from typing import Any, Callable
 
+from dungeon import rules
 from dungeon.entities import Player
 from dungeon.level import count_levels, load_level
+from engine import events as ev
 from engine.collision import is_wall
+from engine.events import EventManager
 from engine.input_manager import InputManager
 from engine.renderer import Renderer
 from engine.states import State
 from engine.timer import FrameClock
 
+ENEMY_EVERY = 5
+
 
 class Game:
-    """Finite state machine coordinating subsystems, levels, and user interaction."""
+    """Finite state machine coordinating subsystems, levels, rules, and user interaction."""
 
     def __init__(self, stdscr: Any) -> None:
         self.stdscr = stdscr
         self.renderer = Renderer(stdscr)
         self.input_mgr = InputManager(stdscr)
         self.clock = FrameClock(fps=10)
+
+        self.bus = EventManager()
+        self.tick = 0
 
         self.state: State = State.MAIN_MENU
         self.current_level_index: int = 0
@@ -47,6 +55,8 @@ class Game:
             State.QUIT: self.draw_quit,
         }
 
+        self.subscribe_events()
+
     @property
     def running(self) -> bool:
         """Helper indicating whether the game loop is active."""
@@ -57,11 +67,57 @@ class Game:
         if not value:
             self.state = State.QUIT
 
+    def subscribe_events(self) -> None:
+        """Subscribe game event handlers to the event bus."""
+        self.bus.subscribe(ev.COIN_COLLECTED, self.on_coin)
+        self.bus.subscribe(ev.KEY_COLLECTED, self.on_key)
+        self.bus.subscribe(ev.TRAP_TRIGGERED, self.on_trap)
+        self.bus.subscribe(ev.ENEMY_HIT, self.on_enemy_hit)
+        self.bus.subscribe(ev.EXIT_LOCKED, self.on_exit_locked)
+        self.bus.subscribe(ev.LEVEL_COMPLETE, self.on_level_complete)
+        self.bus.subscribe(ev.PLAYER_DIED, self.on_player_died)
+
+    def on_coin(self, score: int = 0) -> None:
+        """Handle coin collection event."""
+        self.message = "+10 gold"
+
+    def on_key(self) -> None:
+        """Handle key collection event."""
+        self.message = "Key found"
+
+    def on_trap(self, health: int = 0) -> None:
+        """Handle trap trigger event."""
+        self.message = "Trap"
+
+    def on_enemy_hit(self, health: int = 0) -> None:
+        """Handle enemy collision/hit event."""
+        self.message = "Enemy hit"
+
+    def on_exit_locked(self) -> None:
+        """Handle exit locked event."""
+        self.message = "Exit locked"
+
+    def on_level_complete(self) -> None:
+        """Handle level complete event."""
+        self.state = State.LEVEL_COMPLETE
+
+    def on_player_died(self) -> None:
+        """Handle player death event."""
+        self.state = State.GAME_OVER
+
     def new_game(self) -> None:
         """Initialize a fresh game session starting at level 0."""
-        self.current_level_index = 0
-        self.load_level(0, reset_player=True)
+        self.start_level(0, reset_player=True)
         self.message = "Explore the dungeon! Find the Key (K) and reach the Exit (X)."
+
+    def start_level(self, index: int | None = None, reset_player: bool = False) -> None:
+        """Start a level, resetting frame ticks and hit cooldown."""
+        if index is not None:
+            self.current_level_index = index
+        self.load_level(self.current_level_index, reset_player=reset_player)
+        self.tick = 0
+        if hasattr(self, "player") and self.player is not None:
+            self.player.hit_cooldown = 0
 
     def load_level(self, index: int, reset_player: bool = False) -> None:
         """Load level by index and position player at player_start."""
@@ -75,6 +131,9 @@ class Game:
             self.player = Player(self.level.player_start[0], self.level.player_start[1])
             self.player.health = prev_health
             self.player.score = prev_score
+        self.tick = 0
+        if hasattr(self, "player") and self.player is not None:
+            self.player.hit_cooldown = 0
 
     def run(self) -> None:
         """Execute state machine loop while state != QUIT."""
@@ -112,21 +171,25 @@ class Game:
             self.state = State.QUIT
 
     def update_playing(self, action: str | None) -> None:
-        """Handle gameplay input: movement, collision, pause, quit, and debug keys."""
+        """Handle gameplay input: tick update, movement, rules, and enemy updates."""
         if action == "QUIT":
             self.state = State.QUIT
+            return
         elif action == "PAUSE":
             self.state = State.PAUSED
-        # TEMPORARY: debug keys for testing state transitions (will be removed in v0.6)
-        elif action == "2":
-            self.state = State.GAME_OVER
-        elif action == "3":
-            self.state = State.LEVEL_COMPLETE
-        elif action in ("UP", "DOWN", "LEFT", "RIGHT"):
+            return
+
+        self.tick += 1
+        self.player.tick()
+
+        if action in ("UP", "DOWN", "LEFT", "RIGHT"):
             self.move_player(action)
 
+        if self.state == State.PLAYING and self.tick % ENEMY_EVERY == 0:
+            rules.update_enemies(self.level, self.player, self.bus)
+
     def move_player(self, action: str) -> None:
-        """Compute target position, reject if wall, else commit."""
+        """Compute target position, reject if wall, else commit and check tile."""
         x, y = self.player.x, self.player.y
         if action == "UP":
             y -= 1
@@ -140,6 +203,7 @@ class Game:
         if not is_wall(self.level.grid, x, y):
             self.player.x = x
             self.player.y = y
+            rules.check_tile(self.player, self.level, self.bus)
 
     def update_paused(self, action: str | None) -> None:
         """Handle pause screen input: P resumes, Q quits."""
@@ -149,13 +213,14 @@ class Game:
             self.state = State.QUIT
 
     def update_level_complete(self, action: str | None) -> None:
-        """Handle level complete screen input: ENTER advances to next level or VICTORY."""
+        """Handle level complete screen input: ENTER heals player by 1 and advances level or VICTORY."""
         if action == "ENTER":
+            self.player.heal(1)
             next_index = self.current_level_index + 1
             if next_index >= count_levels():
                 self.state = State.VICTORY
             else:
-                self.load_level(next_index, reset_player=False)
+                self.start_level(next_index, reset_player=False)
                 self.state = State.PLAYING
         elif action == "QUIT":
             self.state = State.QUIT
