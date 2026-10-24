@@ -15,8 +15,8 @@ def reachable(level):
     return seen
 
 
-def test_at_least_one_level_exists():
-    assert count_levels() >= 1  # change to 3 in v0.7
+def test_at_least_three_levels_exist():
+    assert count_levels() >= 3
 
 
 def test_every_level_is_rectangular_and_solvable():
