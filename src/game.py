@@ -1,6 +1,8 @@
 """OS concept: Event-Driven Architecture and State Transitions."""
 
 import curses
+import logging
+import os
 from typing import Any, Callable
 
 from dungeon import rules
@@ -13,6 +15,8 @@ from engine.input_manager import InputManager
 from engine.renderer import Renderer
 from engine.states import State
 from engine.timer import FrameClock
+
+log = logging.getLogger("game")
 
 ENEMY_EVERY = 5
 
@@ -79,18 +83,22 @@ class Game:
 
     def on_coin(self, score: int = 0) -> None:
         """Handle coin collection event."""
+        log.info("Coin collected")
         self.message = "+10 gold"
 
     def on_key(self) -> None:
         """Handle key collection event."""
+        log.info("Key collected")
         self.message = "Key found"
 
     def on_trap(self, health: int = 0) -> None:
         """Handle trap trigger event."""
+        log.info("Trap triggered")
         self.message = "Trap"
 
     def on_enemy_hit(self, health: int = 0) -> None:
         """Handle enemy collision/hit event."""
+        log.info("Enemy hit")
         self.message = "Enemy hit"
 
     def on_exit_locked(self) -> None:
@@ -99,10 +107,12 @@ class Game:
 
     def on_level_complete(self) -> None:
         """Handle level complete event."""
+        log.info("Level complete")
         self.state = State.LEVEL_COMPLETE
 
     def on_player_died(self) -> None:
         """Handle player death event."""
+        log.info("Player died")
         self.state = State.GAME_OVER
 
     def new_game(self) -> None:
@@ -134,9 +144,11 @@ class Game:
         self.tick = 0
         if hasattr(self, "player") and self.player is not None:
             self.player.hit_cooldown = 0
+        log.info(f"Level {index} loaded")
 
     def run(self) -> None:
         """Execute state machine loop while state != QUIT."""
+        log.info(f"Game started (pid={os.getpid()})")
         while self.state != State.QUIT:
             action = self.input_mgr.get_action()
             self.update_handlers[self.state](action)
@@ -144,6 +156,7 @@ class Game:
                 break
             self.draw()
             self.clock.tick()
+        log.info("Game stopped")
 
     def is_terminal_too_small(self) -> bool:
         """Check if terminal dimensions cannot hold the level map and UI lines."""
