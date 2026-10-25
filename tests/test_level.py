@@ -1,4 +1,6 @@
 import collections
+import pytest
+import dungeon.level
 from dungeon.level import load_level, count_levels
 
 
@@ -29,3 +31,11 @@ def test_every_level_is_rectangular_and_solvable():
         seen = reachable(level)
         assert (keys[0].x, keys[0].y) in seen
         assert (exits[0].x, exits[0].y) in seen
+
+
+def test_level_without_player_raises_value_error(tmp_path, monkeypatch):
+    bad_map = tmp_path / "bad_level.txt"
+    bad_map.write_text("#####\n#   #\n#####\n")
+    monkeypatch.setattr(dungeon.level, "level_files", lambda: [str(bad_map)])
+    with pytest.raises(ValueError, match="no player start '@' found"):
+        load_level(0)
