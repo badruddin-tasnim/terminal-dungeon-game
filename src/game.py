@@ -3,6 +3,7 @@
 import curses
 import logging
 import os
+import signal
 from typing import Any, Callable
 
 from dungeon import rules, save_manager
@@ -60,6 +61,7 @@ class Game:
         }
 
         self.subscribe_events()
+        self.install_signal_handlers()
 
     @property
     def running(self) -> bool:
@@ -80,6 +82,16 @@ class Game:
         self.bus.subscribe(ev.EXIT_LOCKED, self.on_exit_locked)
         self.bus.subscribe(ev.LEVEL_COMPLETE, self.on_level_complete)
         self.bus.subscribe(ev.PLAYER_DIED, self.on_player_died)
+
+    def install_signal_handlers(self) -> None:
+        """Register signal handlers for graceful shutdown on SIGINT and SIGTERM."""
+        signal.signal(signal.SIGINT, self.handle_signal)
+        signal.signal(signal.SIGTERM, self.handle_signal)
+
+    def handle_signal(self, signum: int, frame: Any) -> None:
+        """Handle termination signals by logging the signal name and quitting."""
+        log.info(signal.Signals(signum).name)
+        self.state = State.QUIT
 
     def on_coin(self, score: int = 0) -> None:
         """Handle coin collection event."""
