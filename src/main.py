@@ -1,6 +1,7 @@
 """OS concept: Process Lifecycle, Event Loop, and Terminal State Management."""
 
 import curses
+import logging
 import sys
 from pathlib import Path
 
@@ -15,7 +16,12 @@ from game import Game
 
 def main(stdscr: curses.window) -> None:
     """Initialize and run the game application."""
-    Game(stdscr).run()
+    try:
+        Game(stdscr).run()
+    except Exception:
+        logging.getLogger("game").exception("Game crashed")
+        raise
+
 
 
 if __name__ == "__main__":
