@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Any, Callable
 
-from dungeon import rules
+from dungeon import rules, save_manager
 from dungeon.entities import Player
 from dungeon.level import count_levels, load_level
 from engine import events as ev
@@ -120,6 +120,19 @@ class Game:
         self.start_level(0, reset_player=True)
         self.message = "Explore the dungeon! Find the Key (K) and reach the Exit (X)."
 
+    def continue_game(self) -> None:
+        """Load saved game, restore player state, and resume at saved level."""
+        data = save_manager.load_game()
+        if data is None:
+            return
+        player = Player()
+        player.health = data["health"]
+        player.score = data["score"]
+        self.player = player
+        last_level = max(0, count_levels() - 1)
+        self.start_level(min(data["level_index"], last_level))
+        self.state = State.PLAYING
+
     def start_level(self, index: int | None = None, reset_player: bool = False) -> None:
         """Start a level, resetting frame ticks and hit cooldown."""
         if index is not None:
@@ -128,6 +141,7 @@ class Game:
         self.tick = 0
         if hasattr(self, "player") and self.player is not None:
             self.player.hit_cooldown = 0
+        save_manager.save_game(self.current_level_index, self.player.health, self.player.score)
 
     def load_level(self, index: int, reset_player: bool = False) -> None:
         """Load level by index and position player at player_start."""
@@ -176,10 +190,12 @@ class Game:
     # --- State Update Handlers ---
 
     def update_menu(self, action: str | None) -> None:
-        """Handle menu screen input: 1 starts game, 3 or Q quits."""
+        """Handle menu screen input: 1 starts game, 2 continues, 3 or Q quits."""
         if action == "1":
             self.new_game()
             self.state = State.PLAYING
+        elif action == "2":
+            self.continue_game()
         elif action in ("3", "QUIT"):
             self.state = State.QUIT
 
@@ -231,6 +247,7 @@ class Game:
             self.player.heal(1)
             next_index = self.current_level_index + 1
             if next_index >= count_levels():
+                save_manager.delete_save()
                 self.state = State.VICTORY
             else:
                 self.start_level(next_index, reset_player=False)
@@ -261,10 +278,18 @@ class Game:
     def draw_menu(self) -> None:
         """Render the main menu screen."""
         _, h = self.renderer.size()
+        continue_text = (
+            "2  Continue"
+            if save_manager.load_game() is not None
+            else "2  Continue (no save)"
+        )
         self.renderer.put_center(h // 2 - 3, "=== DUNGEON ESCAPE ===", color="title")
         self.renderer.put_center(h // 2 - 1, "1. New Game", color="text")
-        self.renderer.put_center(h // 2, "3. Quit", color="text")
-        self.renderer.put_center(h // 2 + 2, "Press 1 to start, 3 or Q to quit", color="text")
+        self.renderer.put_center(h // 2, continue_text, color="text")
+        self.renderer.put_center(h // 2 + 1, "3. Quit", color="text")
+        self.renderer.put_center(
+            h // 2 + 3, "Press 1 to start, 2 to continue, 3 or Q to quit", color="text"
+        )
 
     def draw_playing(self) -> None:
         """Render the active game map, player, status line, and message line."""
