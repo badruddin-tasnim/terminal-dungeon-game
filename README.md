@@ -167,37 +167,6 @@ The game flow is driven by a finite state machine:
 - `GAME_OVER` / `VICTORY` -> `MAIN_MENU` (via `ENTER`)
 - Any active state -> `QUIT` (via `Q`, menu option `3`, or OS signals `SIGINT`/`SIGTERM`)
 
-```text
-                  +-------------+
-                  |  MAIN_MENU  |
-                  +------+------+
-                         | (1: New Game / 2: Continue)
-                         v
-                  +-------------+   (P: Pause)   +------------+
-                  |             |<-------------->|   PAUSED   |
-                  |             |   (P: Resume)  +------------+
-                  |   PLAYING   |
-                  |             |   (Health <= 0) +------------+
-                  |             +---------------->| GAME_OVER  |
-                  +------+------+                 +-----+------+
-                         |                              |
-                         | (Exit with key)              | (ENTER)
-                         v                              v
-                +-----------------+               [MAIN_MENU]
-                | LEVEL_COMPLETE  |
-                +--------+--------+
-                         | (ENTER)
-           +-------------+-------------+
-           | (has next level)          | (after last level)
-           v                           v
-     [Next Level]                 +------------+
-     (-> PLAYING)                 |  VICTORY   |
-                                  +-----+------+
-                                        | (ENTER)
-                                        v
-                                   [MAIN_MENU]
-```
-
 ```mermaid
 stateDiagram-v2
     [*] --> MAIN_MENU
