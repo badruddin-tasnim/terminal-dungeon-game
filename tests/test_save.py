@@ -19,3 +19,9 @@ def test_corrupted_save_returns_none(tmp_path):
     path = tmp_path / "bad.json"
     path.write_text("{not json")
     assert save_manager.load_game(str(path)) is None
+
+
+def test_save_with_non_integer_value_returns_none(tmp_path):
+    path = tmp_path / "bad_types.json"
+    path.write_text('{"level_index": "one", "health": 3, "score": 10}')
+    assert save_manager.load_game(str(path)) is None
