@@ -110,7 +110,7 @@ For the manual test matrix and QA procedures, see [docs/TESTING.md](docs/TESTING
 
 ## Team & File Ownership
 
-This project was built following a structured 7-day cooperative team workflow:
+This project was built following a structured cooperative team workflow:
 
 | Team Member | Role | Owned Modules / Responsibilities |
 | :--- | :--- | :--- |
